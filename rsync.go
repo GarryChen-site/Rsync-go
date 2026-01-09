@@ -74,6 +74,12 @@ func (r *RSync) BlockHashCount(targetLength int) (count int) {
 	return
 }
 
+// Calculate the signature of target.
+// Deprecated: Use CreateSignatureWithContext for cancellation support.
+func (r *RSync) CreateSignature(target io.Reader, sw SignatureWriter) error {
+	return r.CreateSignatureWithContext(context.Background(), target, sw)
+}
+
 // CreateSignatureWithContext calculates the signature of target with context support.
 func (r *RSync) CreateSignatureWithContext(ctx context.Context, target io.Reader, sw SignatureWriter) error {
 	if r.BlockSize <= 0 {
@@ -125,6 +131,12 @@ func (r *RSync) CreateSignatureWithContext(ctx context.Context, target io.Reader
 	return nil
 }
 
+// Apply the difference to the target.
+// Deprecated: Use ApplyDeltaWithContext for cancellation support.
+func (r *RSync) ApplyDelta(alignedTarget io.Writer, target io.ReadSeeker, ops chan Operation) error {
+	return r.ApplyDeltaWithContext(context.Background(), alignedTarget, target, ops)
+}
+
 // ApplyDeltaWithContext applies the difference to the target with context support.
 func (r *RSync) ApplyDeltaWithContext(ctx context.Context, alignedTarget io.Writer, target io.ReadSeeker, ops chan Operation) error {
 	if r.BlockSize <= 0 {
@@ -141,13 +153,20 @@ func (r *RSync) ApplyDeltaWithContext(ctx context.Context, alignedTarget io.Writ
 	buffer := r.buffer
 
 	writeBlock := func(op Operation) error {
-		target.Seek(int64(r.BlockSize*int(op.BlockIndex)), 0)
-		n, err = io.ReadAtLeast(target, buffer, r.BlockSize)
+		_, err := target.Seek(int64(r.BlockSize*int(op.BlockIndex)), 0)
 		if err != nil {
-			if !errors.Is(err, io.ErrUnexpectedEOF) {
-				return err
-			}
+			return err
 		}
+
+		// Try to read a full block, but accept less for the last block
+		n, err = target.Read(buffer[:r.BlockSize])
+		if err != nil && !errors.Is(err, io.EOF) {
+			return err
+		}
+		if n == 0 {
+			return io.EOF
+		}
+
 		block = buffer[:n]
 		_, err = alignedTarget.Write(block)
 		if err != nil {
@@ -196,11 +215,17 @@ func (r *RSync) ApplyDeltaWithContext(ctx context.Context, alignedTarget io.Writ
 	return nil
 }
 
-// CreateDeltaWithContext creates the operation list to mutate the target signature into the source with context support.
+// Create the operation list to mutate the target signature into the source.
 // Any data operation from the OperationWriter must have the data copied out
 // within the span of the function; the data buffer underlying the operation
 // data is reused. The sourceSum create a complete hash sum of the source if
 // present.
+// Deprecated: Use CreateDeltaWithContext for cancellation support.
+func (r *RSync) CreateDelta(source io.Reader, signature []BlockHash, ops OperationWriter) (err error) {
+	return r.CreateDeltaWithContext(context.Background(), source, signature, ops)
+}
+
+// CreateDeltaWithContext creates the operation list to mutate the target signature into the source with context support.
 func (r *RSync) CreateDeltaWithContext(ctx context.Context, source io.Reader, signature []BlockHash, ops OperationWriter) (err error) {
 	if r.BlockSize <= 0 {
 		r.BlockSize = DefaultBlockSize
