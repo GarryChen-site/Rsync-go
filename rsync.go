@@ -67,7 +67,7 @@ func (r *RSync) BlockHashCount(targetLength int) (count int) {
 	if r.BlockSize <= 0 {
 		r.BlockSize = DefaultBlockSize
 	}
-	count = (targetLength / r.BlockSize)
+	count = targetLength / r.BlockSize
 	if targetLength%r.BlockSize != 0 {
 		count++
 	}
@@ -236,7 +236,7 @@ func (r *RSync) CreateDeltaWithContext(ctx context.Context, source io.Reader, si
 	if r.UniqueHasher == nil {
 		r.UniqueHasher = md5.New()
 	}
-	minBufferSize := (r.BlockSize * 2) + (r.MaxDataOp)
+	minBufferSize := (r.BlockSize * 2) + r.MaxDataOp
 	if len(r.buffer) < minBufferSize {
 		r.buffer = make([]byte, minBufferSize)
 	}
